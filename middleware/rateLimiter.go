@@ -1,42 +1,30 @@
 package middleware
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"sync"
-	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
-type ClientData struct {
-	ReqTime  time.Time
-	ReqCount int
-}
-
-var rateLimitMap sync.Map
-
-const (
-	limit  = 10
-	window = 60 * time.Second
-)
+var buckets = make(map[string]*TokenBucket)
+var bucketsMutex sync.Mutex
 
 func RateLimiter() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		ip := ctx.RemoteIP()
+		ip := ctx.ClientIP()
 
-		now := time.Now()
-		value, _ := rateLimitMap.LoadOrStore(ip, &ClientData{ReqTime: now, ReqCount: 1})
-		clientData := value.(*ClientData)
+		bucketsMutex.Lock()
+		bucket, exists := buckets[ip]
+		if !exists {
+			bucket = NewTokenBucket(10, 6) // 10 tokens max, refill 1/6sec
+			buckets[ip] = bucket
+		}
+		bucketsMutex.Unlock()
 
-		if time.Since(clientData.ReqTime) <= window {
-			if clientData.ReqCount > limit {
-				ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "Too Many Requests"})
-				ctx.Abort()
-				return
-			}
-			clientData.ReqCount++
-		} else {
-			clientData.ReqTime = now
-			clientData.ReqCount = 1
+		if !bucket.AllowRequest() {
+			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Slow down, cowboy!"})
+			return
 		}
 
 		ctx.Next()
