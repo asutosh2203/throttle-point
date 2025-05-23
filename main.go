@@ -18,6 +18,8 @@ func main() {
 		log.Println("No .env file found, using system environment")
 	}
 
+	middleware.StartBucketCleanup()
+
 	r := gin.Default()
 
 	r.Any("/*proxyPath", middleware.RateLimiter(), handlers.ProxyHandler)
