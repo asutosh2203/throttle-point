@@ -3,6 +3,7 @@ package handlers
 import (
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,8 +11,13 @@ import (
 
 func ProxyHandler(ctx *gin.Context) {
 
+	backendURL := os.Getenv("BACKEND_URL")
+	if backendURL == "" {
+		backendURL = "http://localhost:3000"
+	}
+
 	// construct target URL
-	targetURL := "http://localhost:3000" + ctx.Request.URL.Path
+	targetURL := backendURL + ctx.Request.URL.Path
 	if ctx.Request.URL.RawQuery != "" {
 		targetURL += "?" + ctx.Request.URL.RawQuery
 	}
